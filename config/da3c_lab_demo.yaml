@@ -22,7 +22,7 @@ relaax-rlx-server:
 algorithm:
   path: ../relaax/algorithms/da3c
 
-  action_size: 11                 # action size for discretisize Lab's agent
+  action_size: 3                  # action size for discretisize Lab's agent
   state_size: [84, 84]            # dimensions of input screen frame of Lab's environment
   history_len: 4                  # number of observations to stack in state
   episode_len: 5                  # local loop size for one episode
