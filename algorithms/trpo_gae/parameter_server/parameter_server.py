@@ -15,7 +15,7 @@ class ParameterServer(relaax.algorithm_base.parameter_server_base.ParameterServe
     def __init__(self, config, saver, metrics):
         self.n_iter = 0             # number of updates within training process
         self.config = config        # common configuration, which is rewritten by yaml
-        self._saver = Saver(saver._dir)  # saver for defined neural networks
+        self._saver = Saver(saver._savers[0]._dir)  # saver for defined neural networks
 
         self.is_collect = True      # set to False if TRPO is under update procedure (for sync only)
         self.paths = []             # experience accumulator
@@ -80,7 +80,10 @@ class ParameterServer(relaax.algorithm_base.parameter_server_base.ParameterServe
         # Policy Update
         pol_stats = self.trpo_updater(self.paths)
 
-        print('Update time:', time() - start)
+        update_time = time() - start
+        print('Update time:', update_time)
+        self._bridge.metrics().scalar('update time', update_time)
+
         self.is_collect = True
 
     def compute_advantage(self):
@@ -108,8 +111,10 @@ class _Bridge(object):
         self._ps = ps
 
     def wait_for_iteration(self):
+        start = time()
         while not self._ps.is_collect:
             sleep(1)
+        self.metrics().scalar('wait time', time() - start)
         return self._ps.n_iter
 
     def send_experience(self, n_iter, paths, length):

@@ -92,8 +92,14 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             return
 
         if old_n_iter < self._n_iter:
-            print('Collecting time:', time.time() - self.collecting_time)   # +update waiting
+            collect_time = time.time() - self.collecting_time
+            print('Collecting time:', collect_time)   # +update waiting
+            self.metrics().scalar('collect time', collect_time)
+
+            start = time.time()
             self.policy.net.set_weights(list(self._parameter_server.receive_weights(self._n_iter)))
+            self.metrics().scalar('sync weights time', time.time() - start)
+
             self.collecting_time = time.time()
 
     def metrics(self):
