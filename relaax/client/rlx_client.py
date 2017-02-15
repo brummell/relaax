@@ -3,7 +3,7 @@ from __future__ import print_function
 import socket
 
 from ..common.protocol import socket_protocol
-from time import time
+
 
 Failure = socket_protocol.Failure
 
@@ -38,18 +38,11 @@ class Client(object):
         return socket_protocol.environment_receive_act(self._socket)
 
     def send(self, reward, state):
-        start = time()
         if reward is None:
             self._agent_service.act(state)
         else:
             self._agent_service.reward_and_act(reward, state)
-        print('AAA', time() - start)
-
-        start = time()
-        res = socket_protocol.environment_receive_act(self._socket)
-        print('BBB', time() - start)
-
-        return res
+        return socket_protocol.environment_receive_act(self._socket)
 
     def reset(self, reward):
         self._agent_service.reward_and_reset(reward)
