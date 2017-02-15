@@ -7,6 +7,7 @@ import relaax.algorithm_base.agent_base
 import relaax.common.protocol.socket_protocol
 
 from . import network
+from sys import getsizeof
 
 
 class Agent(relaax.algorithm_base.agent_base.AgentBase):
@@ -34,6 +35,8 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.collecting_time = time.time()  # timer for collecting experience
 
     def act(self, state):
+        self.metrics().scalar('state size', getsizeof(state))
+
         start = time.time()
         # poll every timestep_limit
         if self._episode_timestep == self._config.timestep_limit:
