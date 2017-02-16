@@ -33,10 +33,10 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.collecting_time = time.time()  # timer for collecting experience
 
     def act(self, state):
-        start = time.time()
+        # start = time.time()
         # poll every timestep_limit
-        if self._episode_timestep == self._config.timestep_limit:
-            self._send_experience()
+        # if self._episode_timestep == self._config.timestep_limit:
+        #    self._send_experience()
 
         obs = self.obs_filter(state)
         self.data["observation"].append(obs)
@@ -46,7 +46,7 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         for (k, v) in agentinfo.iteritems():
             self.data[k].append(v)
 
-        self.metrics().scalar('server latency', time.time() - start)
+        # self.metrics().scalar('server latency', time.time() - start)
         return action
 
     def reward_and_act(self, reward, state):
@@ -62,7 +62,8 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         print("Episode reward =", score)
         self.metrics().scalar('episode reward', score)
 
-        self._send_experience(terminated=True)
+        # self._send_experience(terminated=True)
+        self._send_experience(terminated=(self._episode_timestep < self._config.timestep_limit))
         return score
 
     def _reward(self, reward):
