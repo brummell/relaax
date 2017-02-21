@@ -38,10 +38,10 @@ class GlobalPolicyNN(object):
 
     def apply_gradients(self):
         optimizer = tf.train.RMSPropOptimizer(
-            learning_rate=self.learning_rate,
-            decay=self._RMSP_DECAY,
-            epsilon=self._RMSP_EPSILON
-        )
+                learning_rate=self.learning_rate,
+                decay=self._RMSP_DECAY,
+                epsilon=self._RMSP_EPSILON
+            )
         self.apply_gradients = optimizer.apply_gradients(zip(self.gradients, self.values))
         return self
 
@@ -64,13 +64,19 @@ class AgentPolicyNN(GlobalPolicyNN):
         return pi_out[0]
 
     def compute_gradients(self):
-        optimizer = tf.train.RMSPropOptimizer(
-            learning_rate=self.learning_rate,
-            decay=self._RMSP_DECAY,
-            epsilon=self._RMSP_EPSILON
+        self.optimizer = tf.train.AdamOptimizer(
+            learning_rate=self.learning_rate
         )
-        grads_and_vars = optimizer.compute_gradients(self.loss, self.values)
-        self.grads = [grad for grad, _ in grads_and_vars]
+        #self.grads_and_vars = self.optimizer.compute_gradients(self.loss, self.values)
+        #self.apply_gradients = self.optimizer.apply_gradients(self.grads_and_vars)
+        self.tvars = tf.trainable_variables()
+        #self.newGrads = tf.gradients(self.loss, self.tvars)
+        self.newGrads = tf.gradients(self.loss, self.values)
+
+        self.W1Grad = tf.placeholder(tf.float32, name="batch_grad1")
+        self.W2Grad = tf.placeholder(tf.float32, name="batch_grad2")
+        self.batchGrad = [self.W1Grad, self.W2Grad]
+
         return self
 
     def prepare_loss(self):

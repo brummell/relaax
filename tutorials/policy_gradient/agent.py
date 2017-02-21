@@ -6,12 +6,11 @@ import time
 
 import relaax.algorithm_base.agent_base
 import relaax.common.protocol.socket_protocol
-from network import AgentPolicyNN
 
 
 def make_network(config):
-    network = AgentPolicyNN(config)
-    return network.prepare_loss().compute_gradients()
+    network = AgentNN(config)
+    return network
 
 
 class Agent(relaax.algorithm_base.agent_base.AgentBase):
@@ -20,30 +19,38 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self._parameter_server = parameter_server
         self._local_network = make_network(config)
 
-        self.global_t = 0           # counter for global steps between all agents
-        self.episode_reward = 0     # score accumulator for current episode (game)
-
-        self.states = []            # auxiliary states accumulator through batch_size = 0..N
-        self.actions = []           # auxiliary actions accumulator through batch_size = 0..N
-        self.rewards = []           # auxiliary rewards accumulator through batch_size = 0..N
-
-        self.episode_t = 0          # episode counter through batch_size = 0..M
-
         initialize_all_variables = tf.variables_initializer(tf.global_variables())
-
         self._session = tf.Session()
-
         self._session.run(initialize_all_variables)
+
+        self.gradBuffer = self._session.run(self._local_network.train_vars)
+        for ix, grad in enumerate(self.gradBuffer):
+            self.gradBuffer[ix] = grad * 0
+
+        self.global_t = 0  # counter for global steps between all agents
+        self.episode_reward = 0  # score accumulator for current episode (game)
+
+        self.states = []  # auxiliary states accumulator through batch_size = 0..N
+        self.actions = []  # auxiliary actions accumulator through batch_size = 0..N
+        self.rewards = []  # auxiliary rewards accumulator through batch_size = 0..N
+
+        self.episode_t = 0  # episode counter through batch_size = 0..
 
     def act(self, state):
         start = time.time()
 
-        # Run the policy network and get an action to take
-        prob = self._local_network.run_policy(self._session, state)
-        action = 0 if np.random.uniform() < prob else 1
+        x = np.reshape(state, [1, 4])
 
-        self.states.append(state)
-        self.actions.append([action])
+        # Run the policy network and get an action to take
+        prob = self._local_network.run_policy(self._session, x) #state
+        #action = 0 if np.random.uniform() < prob else 1
+        action = 1 if np.random.uniform() < prob else 0
+
+        self.states.append(x)   # state
+
+        lbl = 1 if action == 0 else 0  # "fake label"
+        #self.actions.append([action])
+        self.actions.append(lbl)
 
         self.metrics().scalar('server latency', time.time() - start)
 
@@ -59,7 +66,7 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             return None
         self.episode_t += 1
 
-        print("Score =", self.episode_reward)
+        print("Herr =", self.episode_reward)
         score = self.episode_reward
 
         self.metrics().scalar('episode reward', self.episode_reward)
@@ -70,9 +77,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             self.episode_t = 0
 
         if self.episode_t == 0:
-            # copy weights from shared to local
-            self._local_network.assign_values(self._session, self._parameter_server.get_values())
-
             self.states = []
             self.actions = []
             self.rewards = []
@@ -89,14 +93,21 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
 
     def _update_global(self):
         feed_dict = {
-            self._local_network.s: self.states,
-            self._local_network.a: self.actions,
-            self._local_network.advantage: self.discounted_reward(np.asarray(self.rewards)),
+            self._local_network.s: np.vstack(self.states),
+            self._local_network.a: np.vstack(self.actions),
+            self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
         }
 
-        self._parameter_server.apply_gradients(
-            self._session.run(self._local_network.grads, feed_dict=feed_dict)
-        )
+        grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+        for ix, grad in enumerate(grads):
+            self.gradBuffer[ix] += grad
+
+        self._session.run(self._local_network.update, feed_dict={
+            self._local_network.W1_grad: self.gradBuffer[0],
+            self._local_network.W2_grad: self.gradBuffer[1]
+        })
+        for ix, grad in enumerate(self.gradBuffer):
+            self.gradBuffer[ix] = grad * 0
 
     def discounted_reward(self, r):
         """ take 1D float array of rewards and compute discounted reward """
@@ -112,3 +123,45 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
 
     def metrics(self):
         return self._parameter_server.metrics()
+
+
+class AgentNN(object):
+    def __init__(self, config):
+        self._action_size = config.action_size
+
+        self.W1 = tf.get_variable('W1', shape=[config.state_size, config.layer_size],
+                                  initializer=tf.contrib.layers.xavier_initializer())
+        self.W2 = tf.get_variable('W2', shape=[config.layer_size, self._action_size],
+                                  initializer=tf.contrib.layers.xavier_initializer())
+
+        self.s = tf.placeholder(tf.float32, [None, config.state_size])
+        hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
+        self.pi = tf.nn.sigmoid(tf.matmul(hidden_fc, self.W2))
+
+        self.prepare_loss()
+        self.prepare_grads()
+        self.prepare_optimizer(config)
+
+    def prepare_loss(self):
+        self.a = tf.placeholder(tf.float32, [None, self._action_size], name="taken_action")
+        self.advantage = tf.placeholder(tf.float32, name="discounted_reward")
+
+        log_like = tf.log(self.a * (self.a - self.pi) + (1 - self.a) * (self.pi - self.a))
+        self.loss = -tf.reduce_mean(log_like * self.advantage)
+
+    def prepare_grads(self):
+        self.train_vars = tf.trainable_variables()
+        self.grads = tf.gradients(self.loss, self.train_vars)
+
+    def prepare_optimizer(self, config):
+        adam = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
+
+        self.W1_grad = tf.placeholder(tf.float32, name="W1_grad")
+        self.W2_grad = tf.placeholder(tf.float32, name="W2_grad")
+        grads = [self.W1_grad, self.W2_grad]
+
+        self.update = adam.apply_gradients(zip(grads, self.train_vars))
+
+    def run_policy(self, sess, s_t):
+        pi_out = sess.run(self.pi, feed_dict={self.s: s_t})
+        return pi_out   #pi_out[0]
