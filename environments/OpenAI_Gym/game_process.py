@@ -47,8 +47,6 @@ class _GameProcess(object):
         self.display = display
         self._close_display = False
 
-        self.timestep_limit = self.gym.spec.timestep_limit
-        self.cur_step_limit = None
         self._state = None
 
         self._process_state = SetProcessFunc(self._process_all)
@@ -81,20 +79,12 @@ class _GameProcess(object):
         state, reward, terminal, info = self.gym.step(action)
         self._state = self._process_state(state)
 
-        self.cur_step_limit += 1
-        if self.cur_step_limit > self.timestep_limit:
-            terminal = True
-
         return reward, terminal
 
     def reset(self):
-        do_act = 0
-
         while True:
             self.gym.reset()
-            self.cur_step_limit = 0
-
-            env_state = self.gym.step(do_act)
+            env_state = self.gym.step(0)
 
             self._state = self._process_state(env_state[0])
             if not env_state[2]:

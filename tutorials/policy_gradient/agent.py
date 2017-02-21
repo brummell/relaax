@@ -111,7 +111,7 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
 
         if avg_score > 200:
             print('Training converged in {} episodes'.format(self.episode_t))
-            self.global_t = self._config.max_global_step
+            self.global_t = self._config.max_global_step + 1
 
         self._session.run(self._local_network.update, feed_dict={
             self._local_network.W1_grad: self.gradBuffer[0],
