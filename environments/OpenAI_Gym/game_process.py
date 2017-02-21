@@ -89,19 +89,11 @@ class _GameProcess(object):
 
     def reset(self):
         do_act = 0
-        self.cur_step_limit = 0
 
         while True:
             self.gym.reset()
-            if not self.display:
-                no_op = np.random.randint(0, self._no_op_max)
-                for _ in range(no_op):
-                    if self.box:
-                        do_act = self._safe_rnd_act()
-                    self.gym.step(do_act)
+            self.cur_step_limit = 0
 
-            if self.box:
-                do_act = self._safe_rnd_act()
             env_state = self.gym.step(do_act)
 
             self._state = self._process_state(env_state[0])

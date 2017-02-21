@@ -38,18 +38,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
     def act(self, state):
         start = time.time()
 
-        if self.episode_t == self._config.batch_size:
-            self._update_global()
-            self.episode_t = 0
-
-        if self.episode_t == 0:
-            # copy weights from shared to local
-            self._local_network.assign_values(self._session, self._parameter_server.get_values())
-
-            self.states = []
-            self.actions = []
-            self.rewards = []
-
         # Run the policy network and get an action to take
         prob = self._local_network.run_policy(self._session, state)
         action = 0 if np.random.uniform() < prob else 1
@@ -69,14 +57,25 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
     def reward_and_reset(self, reward):
         if not self._reward(reward):
             return None
+        self.episode_t += 1
 
         print("Score =", self.episode_reward)
         score = self.episode_reward
 
         self.metrics().scalar('episode reward', self.episode_reward)
-
         self.episode_reward = 0
-        self.episode_t = self._config.batch_size
+
+        if self.episode_t == self._config.batch_size:
+            self._update_global()
+            self.episode_t = 0
+
+        if self.episode_t == 0:
+            # copy weights from shared to local
+            self._local_network.assign_values(self._session, self._parameter_server.get_values())
+
+            self.states = []
+            self.actions = []
+            self.rewards = []
 
         return score
 
@@ -84,7 +83,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.episode_reward += reward
         self.rewards.append(reward)
 
-        self.episode_t += 1
         self.global_t = self._parameter_server.increment_global_t()
 
         return self.global_t < self._config.max_global_step
