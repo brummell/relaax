@@ -19,6 +19,9 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self._parameter_server = parameter_server
         self._local_network = make_network(config)
 
+        print('Learning rate = ', self._config.learning_rate)
+        print('Batch size = ', self._config.batch_size)
+
         initialize_all_variables = tf.variables_initializer(tf.global_variables())
         self._session = tf.Session()
         self._session.run(initialize_all_variables)
@@ -34,7 +37,8 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.actions = []  # auxiliary actions accumulator through batch_size = 0..N
         self.rewards = []  # auxiliary rewards accumulator through batch_size = 0..N
 
-        self.episode_t = 0  # episode counter through batch_size = 0..
+        self.episode_t = 0  # episode counter through the training
+        self.avg_reward = 0
 
     def act(self, state):
         start = time.time()
@@ -66,20 +70,29 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             return None
         self.episode_t += 1
 
-        print("Herr =", self.episode_reward)
+        #print("Herr =", self.episode_reward)
         score = self.episode_reward
+        self.avg_reward += self.episode_reward
 
         self.metrics().scalar('episode reward', self.episode_reward)
         self.episode_reward = 0
 
-        if self.episode_t == self._config.batch_size:
-            self._update_global()
-            self.episode_t = 0
+        feed_dict = {
+            self._local_network.s: np.vstack(self.states),
+            self._local_network.a: np.vstack(self.actions),
+            self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
+        }
 
-        if self.episode_t == 0:
-            self.states = []
-            self.actions = []
-            self.rewards = []
+        grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+        for ix, grad in enumerate(grads):
+            self.gradBuffer[ix] += grad
+
+        if self.episode_t % self._config.batch_size == 0:
+            self._update_global()
+
+        self.states = []
+        self.actions = []
+        self.rewards = []
 
         return score
 
@@ -92,15 +105,13 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         return self.global_t < self._config.max_global_step
 
     def _update_global(self):
-        feed_dict = {
-            self._local_network.s: np.vstack(self.states),
-            self._local_network.a: np.vstack(self.actions),
-            self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
-        }
+        avg_score = self.avg_reward / self._config.batch_size
+        self.avg_reward = 0
+        print("Avg reward within updates =", avg_score)
 
-        grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
-        for ix, grad in enumerate(grads):
-            self.gradBuffer[ix] += grad
+        if avg_score > 200:
+            print('Training converged in {} episodes'.format(self.episode_t))
+            self.global_t = self._config.max_global_step
 
         self._session.run(self._local_network.update, feed_dict={
             self._local_network.W1_grad: self.gradBuffer[0],
