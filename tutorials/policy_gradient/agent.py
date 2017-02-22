@@ -26,10 +26,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self._session = tf.Session()
         self._session.run(initialize_all_variables)
 
-        self.gradBuffer = self._session.run(self._local_network.values)
-        for ix, grad in enumerate(self.gradBuffer):
-            self.gradBuffer[ix] = grad * 0
-
         self.global_t = 0  # counter for global steps between all agents
         self.episode_reward = 0  # score accumulator for current episode (game)
 
@@ -64,32 +60,16 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             return None
         self.episode_t += 1
 
-        #print("Herr =", self.episode_reward)
         score = self.episode_reward
         self.avg_reward += self.episode_reward
 
         self.metrics().scalar('episode reward', self.episode_reward)
         self.episode_reward = 0
 
-        feed_dict = {
-            self._local_network.s: self.states,
-            self._local_network.a: self.actions,
-            self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
-        }
-
-        grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
-        for ix, grad in enumerate(grads):
-            self.gradBuffer[ix] += grad
-
-        self._session.run(self._local_network.update, feed_dict={
-            self._local_network.W1_grad: self.gradBuffer[0],
-            self._local_network.W2_grad: self.gradBuffer[1]
-        })
-        for ix, grad in enumerate(self.gradBuffer):
-            self.gradBuffer[ix] = grad * 0
+        self._update_global()
 
         if self.episode_t % self._config.batch_size == 0:
-            self._update_global()
+            self.check_convergence()
 
         self.states = []
         self.actions = []
@@ -106,6 +86,20 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         return self.global_t < self._config.max_global_step
 
     def _update_global(self):
+        feed_dict = {
+            self._local_network.s: self.states,
+            self._local_network.a: self.actions,
+            self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
+        }
+
+        grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+
+        self._session.run(self._local_network.update, feed_dict={
+            self._local_network.W1_grad: grads_and_vars[0],
+            self._local_network.W2_grad: grads_and_vars[1]
+        })
+
+    def check_convergence(self):
         avg_score = self.avg_reward / self._config.batch_size
         self.avg_reward = 0
         print("Avg reward within updates =", avg_score)
@@ -145,8 +139,10 @@ class AgentNN(object):
         self.pi = tf.nn.sigmoid(tf.matmul(hidden_fc, self.W2))
 
         self.prepare_loss()
-        self.prepare_grads()
-        self.prepare_optimizer(config)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
+
+        self.compute_grads()
+        self.apply_grads()
 
     def prepare_loss(self):
         self.a = tf.placeholder(tf.float32, [None, self._action_size], name="taken_action")
@@ -155,17 +151,15 @@ class AgentNN(object):
         log_like = tf.log(self.a * (self.a - self.pi) + (1 - self.a) * (self.pi - self.a))
         self.loss = -tf.reduce_mean(log_like * self.advantage)
 
-    def prepare_grads(self):
+    def compute_grads(self):
         self.grads = tf.gradients(self.loss, self.values)
 
-    def prepare_optimizer(self, config):
-        adam = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
-
+    def apply_grads(self):
         self.W1_grad = tf.placeholder(tf.float32, name="W1_grad")
         self.W2_grad = tf.placeholder(tf.float32, name="W2_grad")
         grads = [self.W1_grad, self.W2_grad]
 
-        self.update = adam.apply_gradients(zip(grads, self.values))
+        self.update = self.optimizer.apply_gradients(zip(grads, self.values))
 
     def run_policy(self, sess, s_t):
         pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
