@@ -140,7 +140,7 @@ class AgentNN(object):
         self.W2 = tf.get_variable('W2', shape=[config.layer_size, self._action_size],
                                   initializer=tf.contrib.layers.xavier_initializer())
         self.values = [self.W1, self.W2]
-        self.first = False
+        self.first = True
 
         self.s = tf.placeholder(tf.float32, [None, config.state_size])
         hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
