@@ -92,11 +92,17 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
         }
 
+        #grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
         grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
 
+        #self._session.run(self._local_network.update, feed_dict={
+        #    self._local_network.W1_grad: grads[0],
+        #    self._local_network.W2_grad: grads[1]
+        #})
+        grads = [grad for grad, _ in grads_and_vars]
         self._session.run(self._local_network.update, feed_dict={
-            self._local_network.W1_grad: grads_and_vars[0],
-            self._local_network.W2_grad: grads_and_vars[1]
+            self._local_network.W1_grad: grads[0],
+            self._local_network.W2_grad: grads[1]
         })
 
     def check_convergence(self):
@@ -152,7 +158,8 @@ class AgentNN(object):
         self.loss = -tf.reduce_mean(log_like * self.advantage)
 
     def compute_grads(self):
-        self.grads = tf.gradients(self.loss, self.values)
+        #self.grads = tf.gradients(self.loss, self.values)
+        self.grads = self.optimizer.compute_gradients(self.loss, self.values)
 
     def apply_grads(self):
         self.W1_grad = tf.placeholder(tf.float32, name="W1_grad")
