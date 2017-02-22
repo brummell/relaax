@@ -92,18 +92,20 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
             self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
         }
 
-        #grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
-        grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+        if self._local_network.first:
+            grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
 
-        #self._session.run(self._local_network.update, feed_dict={
-        #    self._local_network.W1_grad: grads[0],
-        #    self._local_network.W2_grad: grads[1]
-        #})
-        grads = [grad for grad, _ in grads_and_vars]
-        self._session.run(self._local_network.update, feed_dict={
-            self._local_network.W1_grad: grads[0],
-            self._local_network.W2_grad: grads[1]
-        })
+            self._session.run(self._local_network.update, feed_dict={
+                self._local_network.W1_grad: grads[0],
+                self._local_network.W2_grad: grads[1]
+            })
+        else:
+            grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+            grads = [grad for grad, _ in grads_and_vars]
+            self._session.run(self._local_network.update, feed_dict={
+                self._local_network.W1_grad: grads[0],
+                self._local_network.W2_grad: grads[1]
+            })
 
     def check_convergence(self):
         avg_score = self.avg_reward / self._config.batch_size
@@ -139,16 +141,15 @@ class AgentNN(object):
         self.W2 = tf.get_variable('W2', shape=[config.layer_size, self._action_size],
                                   initializer=tf.contrib.layers.xavier_initializer())
         self.values = [self.W1, self.W2]
+        self.first = True
 
         self.s = tf.placeholder(tf.float32, [None, config.state_size])
         hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
         self.pi = tf.nn.sigmoid(tf.matmul(hidden_fc, self.W2))
 
         self.prepare_loss()
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
-
-        self.compute_grads()
-        self.apply_grads()
+        self.compute_grads(config)
+        self.apply_grads(config)
 
     def prepare_loss(self):
         self.a = tf.placeholder(tf.float32, [None, self._action_size], name="taken_action")
@@ -157,11 +158,17 @@ class AgentNN(object):
         log_like = tf.log(self.a * (self.a - self.pi) + (1 - self.a) * (self.pi - self.a))
         self.loss = -tf.reduce_mean(log_like * self.advantage)
 
-    def compute_grads(self):
-        #self.grads = tf.gradients(self.loss, self.values)
-        self.grads = self.optimizer.compute_gradients(self.loss, self.values)
+    def compute_grads(self, config):
+        if self.first:
+            self.grads = tf.gradients(self.loss, self.values)
+        else:
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
+            self.grads = self.optimizer.compute_gradients(self.loss, self.values)
 
-    def apply_grads(self):
+    def apply_grads(self, config):
+        if self.first:
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
+
         self.W1_grad = tf.placeholder(tf.float32, name="W1_grad")
         self.W2_grad = tf.placeholder(tf.float32, name="W2_grad")
         grads = [self.W1_grad, self.W2_grad]
