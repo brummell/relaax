@@ -47,14 +47,10 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
 
         # Run the policy network and get an action to take
         prob = self._local_network.run_policy(self._session, x) #state
-        #action = 0 if np.random.uniform() < prob else 1
-        action = 1 if np.random.uniform() < prob else 0
+        action = 0 if np.random.uniform() < prob else 1
 
         self.states.append(x)   # state
-
-        lbl = 1 if action == 0 else 0  # "fake label"
-        #self.actions.append([action])
-        self.actions.append(lbl)
+        self.actions.append(action)
 
         self.metrics().scalar('server latency', time.time() - start)
 
