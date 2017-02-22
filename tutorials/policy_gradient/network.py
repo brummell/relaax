@@ -19,6 +19,11 @@ class AgentNN(object):
         hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
         self.pi = tf.nn.sigmoid(tf.matmul(hidden_fc, self.W2))
 
+        self._placeholders = [tf.placeholder(v.dtype, v.get_shape()) for v in self.values]
+        self._assign_values = tf.group(*[
+            tf.assign(v, p) for v, p in zip(self.values, self._placeholders)
+            ])
+
         self.prepare_loss()
         self.compute_grads(config)
         self.apply_grads(config)
@@ -48,3 +53,8 @@ class AgentNN(object):
     def run_policy(self, sess, s_t):
         pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
         return pi_out[0]
+
+    def assign_values(self, session, values):
+        session.run(self._assign_values, feed_dict={
+            p: v for p, v in zip(self._placeholders, values)
+        })

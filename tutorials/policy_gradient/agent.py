@@ -35,7 +35,10 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.rewards = []  # auxiliary rewards accumulator through batch_size = 0..N
 
         self.episode_t = 0  # episode counter through the training
+
         self.avg_reward = 0
+        # copy weights from shared to local
+        self._local_network.assign_values(self._session, self._parameter_server.get_values())
 
     def act(self, state):
         start = time.time()
@@ -68,6 +71,8 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.episode_reward = 0
 
         self._update_global()
+        # copy weights from shared to local
+        # self._local_network.assign_values(self._session, self._parameter_server.get_values())
 
         if self.episode_t % self._config.batch_size == 0:
             self.check_convergence()
