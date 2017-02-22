@@ -26,7 +26,7 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self._session = tf.Session()
         self._session.run(initialize_all_variables)
 
-        self.gradBuffer = self._session.run(self._local_network.train_vars)
+        self.gradBuffer = self._session.run(self._local_network.values)
         for ix, grad in enumerate(self.gradBuffer):
             self.gradBuffer[ix] = grad * 0
 
@@ -138,6 +138,7 @@ class AgentNN(object):
                                   initializer=tf.contrib.layers.xavier_initializer())
         self.W2 = tf.get_variable('W2', shape=[config.layer_size, self._action_size],
                                   initializer=tf.contrib.layers.xavier_initializer())
+        self.values = [self.W1, self.W2]
 
         self.s = tf.placeholder(tf.float32, [None, config.state_size])
         hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
@@ -155,8 +156,7 @@ class AgentNN(object):
         self.loss = -tf.reduce_mean(log_like * self.advantage)
 
     def prepare_grads(self):
-        self.train_vars = tf.trainable_variables()
-        self.grads = tf.gradients(self.loss, self.train_vars)
+        self.grads = tf.gradients(self.loss, self.values)
 
     def prepare_optimizer(self, config):
         adam = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
@@ -165,7 +165,7 @@ class AgentNN(object):
         self.W2_grad = tf.placeholder(tf.float32, name="W2_grad")
         grads = [self.W1_grad, self.W2_grad]
 
-        self.update = adam.apply_gradients(zip(grads, self.train_vars))
+        self.update = adam.apply_gradients(zip(grads, self.values))
 
     def run_policy(self, sess, s_t):
         pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
