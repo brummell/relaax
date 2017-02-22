@@ -6,7 +6,7 @@ import time
 
 import relaax.algorithm_base.agent_base
 import relaax.common.protocol.socket_protocol
-from network import AgentPolicyNN
+from network_ import AgentPolicyNN
 
 
 def make_network(config):

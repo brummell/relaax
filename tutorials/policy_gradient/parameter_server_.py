@@ -2,12 +2,12 @@ import tensorflow as tf
 
 import relaax.algorithm_base.bridge_base
 import relaax.algorithm_base.parameter_server_base
-from network import AgentNN
+from network_ import GlobalPolicyNN
 
 
 def make_network(config):
-    network = AgentNN(config)
-    return network
+    network = GlobalPolicyNN(config)
+    return network.apply_gradients()
 
 
 class ParameterServer(relaax.algorithm_base.parameter_server_base.ParameterServerBase):
@@ -51,7 +51,13 @@ class _Bridge(relaax.algorithm_base.bridge_base.BridgeBase):
     def apply_gradients(self, gradients):
         feed_dict = {p: v for p, v in zip(self._network.gradients, gradients)}
 
+        #print('PS W-1\n', self._session.run(self._network.W1))
+        #print('PS W-2\n', self._session.run(self._network.W2))
+
         self._session.run(self._network.apply_gradients, feed_dict=feed_dict)
+
+        #print('PS-applied W-1\n', self._session.run(self._network.W1))
+        #print('PS-applied W-2\n', self._session.run(self._network.W2))
 
     def get_values(self):
         return self._session.run(self._network.values)
