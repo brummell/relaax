@@ -95,17 +95,16 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         if self._local_network.first:
             grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
 
-            self._session.run(self._local_network.update, feed_dict={
-                self._local_network.W1_grad: grads[0],
-                self._local_network.W2_grad: grads[1]
-            })
+            feed_dict = {p: v for p, v in zip(self._local_network.gradients, grads)}
+
+            self._session.run(self._local_network.update, feed_dict=feed_dict)
         else:
             grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
+
             grads = [grad for grad, _ in grads_and_vars]
-            self._session.run(self._local_network.update, feed_dict={
-                self._local_network.W1_grad: grads[0],
-                self._local_network.W2_grad: grads[1]
-            })
+            feed_dict = {p: v for p, v in zip(self._local_network.gradients, grads)}
+
+            self._session.run(self._local_network.update, feed_dict=feed_dict)
 
     def check_convergence(self):
         avg_score = self.avg_reward / self._config.batch_size
@@ -141,7 +140,7 @@ class AgentNN(object):
         self.W2 = tf.get_variable('W2', shape=[config.layer_size, self._action_size],
                                   initializer=tf.contrib.layers.xavier_initializer())
         self.values = [self.W1, self.W2]
-        self.first = True
+        self.first = False
 
         self.s = tf.placeholder(tf.float32, [None, config.state_size])
         hidden_fc = tf.nn.relu(tf.matmul(self.s, self.W1))
@@ -169,11 +168,9 @@ class AgentNN(object):
         if self.first:
             self.optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
 
-        self.W1_grad = tf.placeholder(tf.float32, name="W1_grad")
-        self.W2_grad = tf.placeholder(tf.float32, name="W2_grad")
-        grads = [self.W1_grad, self.W2_grad]
+        self.gradients = [tf.placeholder(v.dtype, v.get_shape()) for v in self.values]
 
-        self.update = self.optimizer.apply_gradients(zip(grads, self.values))
+        self.update = self.optimizer.apply_gradients(zip(self.gradients, self.values))
 
     def run_policy(self, sess, s_t):
         pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
