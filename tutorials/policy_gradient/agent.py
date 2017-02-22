@@ -43,13 +43,11 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
     def act(self, state):
         start = time.time()
 
-        x = np.reshape(state, [1, 4])
-
         # Run the policy network and get an action to take
-        prob = self._local_network.run_policy(self._session, x) #state
+        prob = self._local_network.run_policy(self._session, state)
         action = 0 if np.random.uniform() < prob else 1
 
-        self.states.append(x)   # state
+        self.states.append(state)
         self.actions.append(action)
 
         self.metrics().scalar('server latency', time.time() - start)
@@ -74,7 +72,7 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.episode_reward = 0
 
         feed_dict = {
-            self._local_network.s: np.vstack(self.states),
+            self._local_network.s: self.states,
             self._local_network.a: np.vstack(self.actions),
             self._local_network.advantage: self.discounted_reward(np.vstack(self.rewards)),
         }
@@ -170,5 +168,5 @@ class AgentNN(object):
         self.update = adam.apply_gradients(zip(grads, self.train_vars))
 
     def run_policy(self, sess, s_t):
-        pi_out = sess.run(self.pi, feed_dict={self.s: s_t})
-        return pi_out   #pi_out[0]
+        pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
+        return pi_out[0]
