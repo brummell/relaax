@@ -81,6 +81,13 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         for ix, grad in enumerate(grads):
             self.gradBuffer[ix] += grad
 
+        self._session.run(self._local_network.update, feed_dict={
+            self._local_network.W1_grad: self.gradBuffer[0],
+            self._local_network.W2_grad: self.gradBuffer[1]
+        })
+        for ix, grad in enumerate(self.gradBuffer):
+            self.gradBuffer[ix] = grad * 0
+
         if self.episode_t % self._config.batch_size == 0:
             self._update_global()
 
@@ -106,13 +113,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         if avg_score > 200:
             print('Training converged in {} episodes'.format(self.episode_t))
             self.global_t = self._config.max_global_step + 1
-
-        self._session.run(self._local_network.update, feed_dict={
-            self._local_network.W1_grad: self.gradBuffer[0],
-            self._local_network.W2_grad: self.gradBuffer[1]
-        })
-        for ix, grad in enumerate(self.gradBuffer):
-            self.gradBuffer[ix] = grad * 0
 
     def discounted_reward(self, r):
         """ take 1D float array of rewards and compute discounted reward """
