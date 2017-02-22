@@ -71,8 +71,6 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         self.episode_reward = 0
 
         self._update_global()
-        # copy weights from shared to local
-        # self._local_network.assign_values(self._session, self._parameter_server.get_values())
 
         if self.episode_t % self._config.batch_size == 0:
             self.check_convergence()
@@ -99,11 +97,13 @@ class Agent(relaax.algorithm_base.agent_base.AgentBase):
         }
 
         if self._local_network.first:
-            grads = self._session.run(self._local_network.grads, feed_dict=feed_dict)
 
-            feed_dict = {p: v for p, v in zip(self._local_network.gradients, grads)}
+            self._parameter_server.apply_gradients(
+                self._session.run(self._local_network.grads, feed_dict=feed_dict)
+            )
 
-            self._session.run(self._local_network.update, feed_dict=feed_dict)
+            # copy weights from shared to local
+            self._local_network.assign_values(self._session, self._parameter_server.get_values())
         else:
             grads_and_vars = self._session.run(self._local_network.grads, feed_dict=feed_dict)
 

@@ -51,7 +51,7 @@ class _Bridge(relaax.algorithm_base.bridge_base.BridgeBase):
     def apply_gradients(self, gradients):
         feed_dict = {p: v for p, v in zip(self._network.gradients, gradients)}
 
-        self._session.run(self._network.apply_gradients, feed_dict=feed_dict)
+        self._session.run(self._network.update, feed_dict=feed_dict)
 
     def get_values(self):
         return self._session.run(self._network.values)
