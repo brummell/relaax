@@ -59,15 +59,9 @@ class _GameACNetwork(object):
         return self
 
     def compute_gradients(self, config):
-        optimizer = tf.train.RMSPropOptimizer(
-            learning_rate=self.learning_rate_input,
-            decay=config.RMSP_ALPHA,
-            momentum=0.0,
-            epsilon=config.RMSP_EPSILON
-        )
-        grads_and_vars = optimizer.compute_gradients(self.total_loss, self.values)
+        grads = tf.gradients(self.total_loss, self.values)
         self.grads = [tf.clip_by_norm(grad, config.GRAD_NORM_CLIP)
-                      for grad, _ in grads_and_vars]
+                      for grad in grads]
         return self
 
     def apply_gradients(self, config):
